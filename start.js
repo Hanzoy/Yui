@@ -31,6 +31,7 @@ function registerDefaultEvents(app) {
         : "Reusing the previous session."
     );
     console.log("Type your message and press Enter.");
+    console.log('Type "debug" to toggle debug mode.');
     console.log('Type "exit" or "quit" to stop.\n');
   });
 
@@ -42,8 +43,24 @@ function registerDefaultEvents(app) {
       content: text,
     });
     const recentMessages = await app.memoryStore.getRecentMessages(app.sessionId, 20);
+    const contextMessages = [
+      {
+        role: "system",
+        content: "以下是当前会话最近的聊天记录，请结合这些最近聊天记录来理解上下文并继续回复。",
+      },
+      ...recentMessages,
+    ];
     const reply = await chatWithOllama(text, {
-      messages: recentMessages,
+      messages: contextMessages,
+      onBeforeSend: async (payload) => {
+        if (!app.debugMode) {
+          return;
+        }
+
+        console.log("[Debug] Sending payload to model:");
+        console.log(JSON.stringify(payload, null, 2));
+        console.log("");
+      },
     });
     await app.emitAsync("modelReply", { text: reply });
   });
@@ -86,6 +103,13 @@ function startConsoleInput(app) {
         return;
       }
 
+      if (text === "debug") {
+        app.debugMode = !app.debugMode;
+        console.log(app.debugMode ? "[Debug] ON" : "[Debug] OFF");
+        rl.prompt();
+        return;
+      }
+
       if (text === "exit" || text === "quit") {
         await app.emitAsync("shutdown");
         rl.close();
@@ -117,6 +141,7 @@ async function main() {
   app.memoryStore = createMemoryStore();
   app.sessionId = sessionState.sessionId;
   app.isNewSession = sessionState.isNewSession;
+  app.debugMode = false;
   await app.memoryStore.initialize();
   registerDefaultEvents(app);
   await app.emitAsync("startup");

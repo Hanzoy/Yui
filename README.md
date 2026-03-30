@@ -8,15 +8,18 @@
 - `ollamaClient.js`：封装对 Ollama 的请求
 - `chatMemory.js`：封装 PostgreSQL 存储
 - `history.js`：直接从 PostgreSQL 读取并打印聊天记录
+- `clear-history.js`：清空聊天记录表
 - `sessionStore.js`：持久化保存当前 `session_id`
 - `SOUL.md`：每次请求都会自动附带的系统提示词
 - `start.cmd`：启动聊天程序
 - `history.cmd`：查看最近 20 条聊天记录
+- `clear-history.cmd`：清空聊天记录
 
 ## 当前功能
 
 - 每次请求都会自动读取并携带 `SOUL.md`
 - 每次请求都会自动携带当前会话最近 20 条聊天记录
+- 在控制台输入 `debug` 可以切换调试模式
 - 控制台输入会触发 `userInput` 事件
 - 模型回复会触发 `modelReply` 事件
 - 用户消息和模型消息都会写入 PostgreSQL 的 `chat_messages` 表
@@ -37,6 +40,8 @@
 .\start.cmd new-session
 ```
 
+输入 `debug` 可以打开或关闭调试模式。打开后，每次请求都会在控制台打印发送给模型的完整 payload。
+
 ## 查看聊天记录
 
 先把 `history.cmd` 里的数据库密码改成你自己的，然后运行：
@@ -46,6 +51,16 @@
 ```
 
 这个脚本会直接通过 Node 连接 PostgreSQL 并输出最近 20 条聊天记录，避免 `psql` 在 Windows 控制台下的中文乱码问题。
+
+## 清空聊天记录
+
+先把 `clear-history.cmd` 里的数据库密码改成你自己的，然后运行：
+
+```powershell
+.\clear-history.cmd
+```
+
+这个脚本会清空 `chat_messages` 表，并重置自增 `id`。
 
 ## PostgreSQL 默认连接参数
 

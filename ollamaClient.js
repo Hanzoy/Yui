@@ -37,17 +37,22 @@ async function chatWithOllama(message, options = {}) {
   const ollamaUrl = options.ollamaUrl ?? DEFAULT_OLLAMA_URL;
   const model = options.model ?? DEFAULT_MODEL_NAME;
   const messages = await buildMessages(message, options);
+  const payload = {
+    model,
+    stream: false,
+    messages,
+  };
+
+  if (typeof options.onBeforeSend === "function") {
+    await options.onBeforeSend(payload);
+  }
 
   const response = await fetch(ollamaUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -63,6 +68,7 @@ module.exports = {
   DEFAULT_MODEL_NAME,
   DEFAULT_OLLAMA_URL,
   DEFAULT_SOUL_PATH,
+  buildMessages,
   chatWithOllama,
   loadSoulPrompt,
 };
