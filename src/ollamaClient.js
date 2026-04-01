@@ -3,7 +3,7 @@ const path = require("path");
 
 const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434/api/chat";
 const DEFAULT_MODEL_NAME = "qwen3.5:9b";
-const DEFAULT_SOUL_PATH = path.join(__dirname, "SOUL.md");
+const DEFAULT_SOUL_PATH = path.join(__dirname, "..", "SOUL.md");
 
 async function loadSoulPrompt(soulPath = DEFAULT_SOUL_PATH) {
   const content = await fs.readFile(soulPath, "utf8");

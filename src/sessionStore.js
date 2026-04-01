@@ -2,7 +2,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const { randomUUID } = require("crypto");
 
-const SESSION_FILE_PATH = path.join(__dirname, ".session.json");
+const SESSION_FILE_PATH = path.join(__dirname, "..", ".session.json");
 
 async function loadSessionState() {
   try {

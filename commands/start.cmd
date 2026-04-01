@@ -4,7 +4,7 @@ set "PGHOST=127.0.0.1"
 set "PGPORT=5432"
 set "PGDATABASE=postgres"
 set "PGUSER=postgres"
-set "PGPASSWORD=123456"
+set "PGPASSWORD=6282381"
 set "PGCLIENTENCODING=UTF8"
 
-node .\clear-history.js
+node "%~dp0..\src\start.js" %*

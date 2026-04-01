@@ -2,9 +2,9 @@
   "name": "yui",
   "version": "1.0.0",
   "description": "这是一个本地 `Ollama + Node.js + PostgreSQL` 的简单 demo。",
-  "main": "start.js",
+  "main": "src/start.js",
   "scripts": {
-    "start": "node start.js",
+    "start": "node src/start.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
