@@ -43,6 +43,10 @@ async function chatWithOllama(message, options = {}) {
     messages,
   };
 
+  if (typeof options.think === "boolean") {
+    payload.think = options.think;
+  }
+
   if (typeof options.onBeforeSend === "function") {
     await options.onBeforeSend(payload);
   }
@@ -64,11 +68,27 @@ async function chatWithOllama(message, options = {}) {
   return data.message.content;
 }
 
+async function chatWithThinking(message, options = {}) {
+  return chatWithOllama(message, {
+    ...options,
+    think: true,
+  });
+}
+
+async function chatWithoutThinking(message, options = {}) {
+  return chatWithOllama(message, {
+    ...options,
+    think: false,
+  });
+}
+
 module.exports = {
   DEFAULT_MODEL_NAME,
   DEFAULT_OLLAMA_URL,
   DEFAULT_SOUL_PATH,
   buildMessages,
   chatWithOllama,
+  chatWithThinking,
+  chatWithoutThinking,
   loadSoulPrompt,
 };

@@ -5,6 +5,8 @@
   "main": "src/start.js",
   "scripts": {
     "start": "node src/start.js",
+    "speech-demo": "node services/speech-demo/src/server.js",
+    "speech-demo:models": "powershell -ExecutionPolicy Bypass -File ./services/speech-demo/scripts/download-models.ps1",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -20,6 +22,10 @@
   },
   "homepage": "https://github.com/Hanzoy/Yui#readme",
   "dependencies": {
-    "pg": "^8.20.0"
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "pg": "^8.20.0",
+    "sherpa-onnx-node": "^1.12.38",
+    "ws": "^8.20.0"
   }
 }

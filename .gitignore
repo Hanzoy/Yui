@@ -1,3 +1,6 @@
 
 node_modules
 .session.json
+services/speech-demo/models/
+services/speech-demo/uploads/
+services/speech-demo/*.log

@@ -12,6 +12,7 @@
 ## 主要文件
 
 - `commands/start.cmd`：启动聊天程序
+- `commands/start-qwen.cmd`：用 Ollama 启动 `qwen3.5:9b`
 - `commands/history.cmd`：查看最近 20 条聊天记录
 - `commands/clear-history.cmd`：清空聊天记录
 - `src/start.js`：常驻运行的事件驱动聊天程序
@@ -38,6 +39,28 @@
 ```
 
 输入 `debug` 可以打开或关闭调试模式。打开后，每次请求都会在控制台打印发送给模型的完整 payload。
+
+## 启动 Qwen
+
+如果你想直接通过 Ollama 启动 `qwen3.5:9b`，可以运行：
+
+```powershell
+.\commands\start-qwen.cmd
+```
+
+这个命令等价于：
+
+```powershell
+ollama run qwen3.5:9b
+```
+
+## 底层调用
+
+`src/ollamaClient.js` 现在提供三种可复用方法，供其他代码直接调用：
+
+- `chatWithOllama(message, options)`：默认请求
+- `chatWithThinking(message, options)`：显式要求模型启用 thinking
+- `chatWithoutThinking(message, options)`：显式要求模型返回不 think 的回答
 
 ## 查看聊天记录
 

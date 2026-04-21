@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Speech Demo Realtime</title>
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --panel: rgba(255, 252, 247, 0.92);
+        --ink: #1f1d1a;
+        --muted: #6f665b;
+        --accent: #b85c38;
+        --accent-strong: #8d3f1f;
+        --border: rgba(31, 29, 26, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(184, 92, 56, 0.15), transparent 35%),
+          linear-gradient(145deg, #efe6da 0%, var(--bg) 46%, #f8f4ef 100%);
+      }
+
+      main {
+        width: min(920px, calc(100% - 32px));
+        margin: 32px auto;
+        padding: 28px;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background: var(--panel);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 16px 40px rgba(71, 52, 36, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(28px, 5vw, 44px);
+        line-height: 1.05;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      button {
+        border: none;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font-size: 15px;
+        cursor: pointer;
+        transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .primary {
+        color: #fffaf3;
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      }
+
+      .secondary {
+        color: var(--ink);
+        background: #efe3d5;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .card {
+        padding: 16px;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .value {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .log {
+        margin-top: 24px;
+      }
+
+      #segments {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      #segments li {
+        margin-top: 12px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      code {
+        font-family: Consolas, "Courier New", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Realtime Speech Demo</h1>
+      <p>浏览器麦克风通过 WebSocket 发送 16kHz / 20ms / Int16 PCM 帧，Node 端用 sherpa-onnx 做 VAD + ASR。</p>
+
+      <section class="controls">
+        <button id="startButton" class="primary">开始监听</button>
+        <button id="stopButton" class="secondary" disabled>停止监听</button>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <span class="label">连接状态</span>
+          <div id="connectionState" class="value">未连接</div>
+        </article>
+        <article class="card">
+          <span class="label">音频格式</span>
+          <div class="value"><code>16kHz / mono / int16 / 20ms</code></div>
+        </article>
+        <article class="card">
+          <span class="label">最新文本</span>
+          <div id="latestText" class="value">等待语音输入</div>
+        </article>
+      </section>
+
+      <section class="log">
+        <span class="label">分段结果</span>
+        <ul id="segments"></ul>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

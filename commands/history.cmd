@@ -8,3 +8,4 @@ set "PGPASSWORD=6282381"
 set "PGCLIENTENCODING=UTF8"
 
 node "%~dp0..\src\history.js"
+pause
