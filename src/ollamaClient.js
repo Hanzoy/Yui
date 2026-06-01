@@ -33,7 +33,7 @@ async function buildMessages(message, options = {}) {
   return messages;
 }
 
-async function chatWithOllama(message, options = {}) {
+async function createOllamaMessage(message, options = {}) {
   const ollamaUrl = options.ollamaUrl ?? DEFAULT_OLLAMA_URL;
   const model = options.model ?? DEFAULT_MODEL_NAME;
   const messages = await buildMessages(message, options);
@@ -45,6 +45,10 @@ async function chatWithOllama(message, options = {}) {
 
   if (typeof options.think === "boolean") {
     payload.think = options.think;
+  }
+
+  if (options.tools) {
+    payload.tools = options.tools;
   }
 
   if (typeof options.onBeforeSend === "function") {
@@ -65,7 +69,12 @@ async function chatWithOllama(message, options = {}) {
   }
 
   const data = await response.json();
-  return data.message.content;
+  return data.message;
+}
+
+async function chatWithOllama(message, options = {}) {
+  const responseMessage = await createOllamaMessage(message, options);
+  return responseMessage.content;
 }
 
 async function chatWithThinking(message, options = {}) {
@@ -90,5 +99,6 @@ module.exports = {
   chatWithOllama,
   chatWithThinking,
   chatWithoutThinking,
+  createOllamaMessage,
   loadSoulPrompt,
 };

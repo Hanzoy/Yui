@@ -30,20 +30,30 @@ function createMemoryStore(config = DEFAULT_DB_CONFIG) {
       `);
     },
     async saveMessage({ sessionId, role, content }) {
-      await pool.query(
+      const result = await pool.query(
         `
           INSERT INTO chat_messages (session_id, role, content)
           VALUES ($1, $2, $3)
+          RETURNING id, session_id, role, content, created_at
         `,
         [sessionId, role, content]
       );
+
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        sessionId: row.session_id,
+        role: row.role,
+        content: row.content,
+        createdAt: row.created_at,
+      };
     },
     async getRecentMessages(sessionId, limit = 20) {
       const result = await pool.query(
         `
-          SELECT role, content
+          SELECT role, content, created_at
           FROM (
-            SELECT id, role, content
+            SELECT id, role, content, created_at
             FROM chat_messages
             WHERE session_id = $1
             ORDER BY id DESC
@@ -57,6 +67,7 @@ function createMemoryStore(config = DEFAULT_DB_CONFIG) {
       return result.rows.map((row) => ({
         role: row.role,
         content: row.content,
+        createdAt: row.created_at,
       }));
     },
     async close() {

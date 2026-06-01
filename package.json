@@ -5,6 +5,7 @@
   "main": "src/start.js",
   "scripts": {
     "start": "node src/start.js",
+    "skill": "node src/skillCommand.js",
     "speech-demo": "node services/speech-demo/src/server.js",
     "speech-demo:models": "powershell -ExecutionPolicy Bypass -File ./services/speech-demo/scripts/download-models.ps1",
     "test": "echo \"Error: no test specified\" && exit 1"

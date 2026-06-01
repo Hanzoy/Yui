@@ -1,5 +1,6 @@
 const { Pool } = require("pg");
 const { DEFAULT_DB_CONFIG } = require("./chatMemory");
+const { createVectorMemory } = require("./qdrantMemory");
 
 async function main() {
   if (!DEFAULT_DB_CONFIG.password) {
@@ -9,11 +10,24 @@ async function main() {
   }
 
   const pool = new Pool(DEFAULT_DB_CONFIG);
+  const vectorMemory = createVectorMemory();
 
   try {
     const result = await pool.query("TRUNCATE TABLE chat_messages RESTART IDENTITY");
-    console.log("Chat history cleared.");
+    console.log("PostgreSQL chat history cleared.");
     console.log(result.command);
+
+    if (!vectorMemory.enabled) {
+      console.log("Qdrant vector memory is disabled. Skipped.");
+      return;
+    }
+
+    const wasCleared = await vectorMemory.clear();
+    console.log(
+      wasCleared
+        ? `Qdrant collection cleared: ${vectorMemory.collection}`
+        : `Qdrant collection did not exist: ${vectorMemory.collection}`
+    );
   } finally {
     await pool.end();
   }
