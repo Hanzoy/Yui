@@ -35,7 +35,9 @@
 - `src/clear-history.js`: 清空聊天记录表
 - `src/skillCommand.js`: 独立 skill 命令入口
 - `src/skillChatRunner.js`: skill 调用循环
+- `src/securityGuard.js`: 独立安全审查模块
 - `src/sessionStore.js`: 保存当前 `session_id`
+- `SECURITY.md`: 安全模块独立提示词
 - `services/speech-demo/src/server.js`: 语音 demo 的 HTTP + WebSocket 入口
 
 ## 启动聊天
@@ -60,7 +62,7 @@
 
 ## 启用 Qdrant 长期记忆
 
-Qdrant 用来保存聊天消息的向量，启动聊天时会先用当前输入检索语义相关的历史记忆，再把这些记忆和最近 20 条聊天记录一起传给模型。
+Qdrant 用来保存聊天消息的向量，启动聊天时会先用当前输入检索语义相关的历史记忆，再把这些记忆和“最近 20 条用户输入以及这些输入期间产生的所有消息”一起传给模型。
 
 ### 安装和启动 Qdrant
 
@@ -169,20 +171,43 @@ npm start
 
 ## Skill 调用
 
-聊天入口已经接入主流 Skill 包形式。每个 skill 是一个独立目录，包含 `SKILL.md` 和自己的执行脚本。Yui 主程序只扫描 `SKILL.md`，把 skill 使用说明写进 system prompt；模型需要 skill 时，按固定文本格式输出 `yui-skill` 代码块。Yui 检测到后，把请求交给独立命令 `src/skillCommand.js` 执行，再把 `yui-skill-result` 结果回填给模型。如果模型继续请求 skill，会继续循环，直到模型给出最终文本回答。
+聊天入口已经接入主流 Skill 包形式。每个 skill 是一个独立目录，包含 `SKILL.md` 和自己的执行脚本。Yui 主程序启动时只把 `SKILL.md` frontmatter 里的 `name` 和 `description` 写进常驻 system prompt；模型需要某个 skill 时，先用 `action:"load"` 加载该 skill 的正文说明，再按说明执行 skill。执行结果会回填给模型。如果模型继续请求 skill，会继续循环，直到模型给出最终文本回答。
 
-默认最多循环 `5` 轮，可以通过环境变量调整：
+Skill 调用不再使用固定最大轮数。每累计 `10` 次 skill 请求，会把当前整体流程上下文交给安全模块检查是否陷入死循环；如果安全模块判断仍在推进任务，就继续执行，否则中断。
 
 ```powershell
-$env:YUI_MAX_SKILL_ROUNDS = "5"
+$env:YUI_SKILL_LOOP_REVIEW_INTERVAL = "10"
 ```
+
+聊天上下文默认保留最近 `20` 条用户输入，并包含这些用户输入期间所有 assistant、system、skill 结果等消息。可以通过环境变量调整用户输入数量：
+
+```powershell
+$env:YUI_RECENT_USER_INPUT_LIMIT = "20"
+```
+
+Skill 中间流程会写入 PostgreSQL，但使用专门 role 区分：
+
+- `skill_request`: 模型发出的 `yui-skill` 请求
+- `skill_response`: Yui 回填的 skill 文档或执行结果
+
+这些中间消息只进入 PostgreSQL，不会写入 Qdrant 向量数据库。只有正常 `user` 消息和最终 `assistant` 回复会写入长期向量记忆。
 
 当前 skills：
 
 - `get-current-time`: 获取当前时间，默认时区 `Asia/Shanghai`
 - `search-memory`: 从 Qdrant 长期记忆里按语义搜索相关聊天记录
+- `read-file`: 读取 Windows 本地文本文件内容，由安全模块审查输入和输出
+- `run-shell-command`: 执行 Windows PowerShell 命令，由安全模块审查输入和输出
 
-模型调用 skill 的匹配格式：
+模型加载 skill 说明的匹配格式：
+
+````markdown
+```yui-skill
+{"skill":"get-current-time","action":"load"}
+```
+````
+
+模型执行 skill 的匹配格式：
 
 ````markdown
 ```yui-skill
@@ -190,11 +215,11 @@ $env:YUI_MAX_SKILL_ROUNDS = "5"
 ```
 ````
 
-一次调用多个 skill 时输出 JSON 数组：
+一次请求多个 skill 时输出 JSON 数组：
 
 ````markdown
 ```yui-skill
-[{"skill":"get-current-time","input":{"timezone":"Asia/Shanghai"}},{"skill":"search-memory","input":{"query":"用户偏好","limit":5}}]
+[{"skill":"get-current-time","action":"load"},{"skill":"search-memory","input":{"query":"用户偏好","limit":5}}]
 ```
 ````
 
@@ -202,7 +227,7 @@ Skill 相关文件：
 
 - `src/skillChatRunner.js`: 模型 skill 调用循环
 - `src/skillCommand.js`: 独立 skill 命令入口
-- `src/skills/registry.js`: 扫描 `skills/*/SKILL.md`，生成 skill 提示词
+- `src/skills/registry.js`: 扫描 `skills/*/SKILL.md`，常驻提示词只包含 `name` 和 `description`，按需加载正文
 - `src/skills/executor.js`: 把 skill 请求交给 `src/skillCommand.js`
 - `skills/<skill-name>/SKILL.md`: skill 名称、触发描述、功能说明、输入输出结构和用法
 - `skills/<skill-name>/scripts/run.js`: 单个 skill 自己的执行逻辑
@@ -242,7 +267,62 @@ Skill 可以手动调试：
 '{"input":{"timezone":"Asia/Shanghai"},"context":{"sessionId":"test"}}' | node src/skillCommand.js get-current-time
 ```
 
-输入 `/debug` 后，可以看到每轮发给模型的 payload，包括 skill 提示词和 skill 结果回填后的 messages。
+读取文件 skill 由安全模块审查输入和输出：
+
+```powershell
+'{"input":{"path":"D:\code\Yui\README.md"}}' | node src/skillCommand.js read-file
+```
+
+执行 shell 命令 skill 由安全模块审查输入和输出：
+
+```powershell
+'{"input":{"command":"Get-ChildItem","cwd":"D:\code\Yui"}}' | node src/skillCommand.js run-shell-command
+```
+
+输入 `/debug` 后，可以看到每轮发给模型的 payload，包括常驻 skill 列表、按需加载的 skill 文档和 skill 结果回填后的 messages。
+
+## 安全模块
+
+每次执行 `src/skillCommand.js` 时，都会经过独立安全模块审查：
+
+1. 执行前检查 skill 输入。
+2. 执行后检查 skill 输出。
+3. 每 10 次 skill 请求检查整体流程是否陷入死循环。
+4. 如果存在危险操作、越权访问、敏感信息泄露风险或死循环，命令/流程会被终止，并返回安全系统驳回原因。
+
+安全模块使用独立提示词：
+
+`SECURITY.md`
+
+它不使用 `SOUL.md`，也不继承 Yui 的人格提示词。
+
+默认安全审查继承当前聊天模型提供商，并强制非思考模式以减少延迟：
+
+```text
+start.cmd: 使用本地 Ollama / Qwen
+start-deepseek.cmd: 使用 DeepSeek
+think: false
+```
+
+也就是说，如果当前聊天是本地 Qwen，安全模块也用本地 Qwen；如果当前聊天是 DeepSeek，安全模块也用 DeepSeek 非思考模式。
+
+可选环境变量：
+
+```powershell
+$env:YUI_SECURITY_ENABLED = "true"
+$env:YUI_SECURITY_MODEL_PROVIDER = "deepseek"
+$env:YUI_SECURITY_MODEL = "deepseek-v4-pro"
+$env:YUI_SECURITY_OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
+$env:YUI_SECURITY_MAX_REVIEW_CHARS = "12000"
+```
+
+如果要临时关闭安全审查：
+
+```powershell
+$env:YUI_SECURITY_ENABLED = "false"
+```
+
+安全审查失败时默认 fail closed，也就是拒绝执行或拒绝返回结果。
 
 ## 查看聊天记录
 

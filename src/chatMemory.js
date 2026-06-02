@@ -70,6 +70,35 @@ function createMemoryStore(config = DEFAULT_DB_CONFIG) {
         createdAt: row.created_at,
       }));
     },
+    async getMessagesSinceRecentUserInputs(sessionId, userInputLimit = 20) {
+      const result = await pool.query(
+        `
+          WITH recent_user_messages AS (
+            SELECT id
+            FROM chat_messages
+            WHERE session_id = $1 AND role = 'user'
+            ORDER BY id DESC
+            LIMIT $2
+          ),
+          cutoff AS (
+            SELECT COALESCE(MIN(id), 0) AS id
+            FROM recent_user_messages
+          )
+          SELECT role, content, created_at
+          FROM chat_messages
+          WHERE session_id = $1
+            AND id >= (SELECT id FROM cutoff)
+          ORDER BY id ASC
+        `,
+        [sessionId, userInputLimit]
+      );
+
+      return result.rows.map((row) => ({
+        role: row.role,
+        content: row.content,
+        createdAt: row.created_at,
+      }));
+    },
     async close() {
       await pool.end();
     },

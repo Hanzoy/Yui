@@ -1,5 +1,6 @@
 const path = require("path");
 const { DEFAULT_SKILLS_ROOT } = require("./skills/registry");
+const { checkSkillInput, checkSkillOutput } = require("./securityGuard");
 
 async function readStdin() {
   const chunks = [];
@@ -29,7 +30,23 @@ async function run() {
 
   const rawInput = await readStdin();
   const payload = rawInput ? JSON.parse(rawInput) : {};
-  const result = await script.run(payload.input || {}, payload.context || {});
+  const input = payload.input || {};
+  const context = payload.context || {};
+
+  await checkSkillInput({
+    skillName,
+    input,
+    context,
+  });
+
+  const result = await script.run(input, context);
+
+  await checkSkillOutput({
+    skillName,
+    input,
+    output: result,
+  });
+
   process.stdout.write(JSON.stringify({ ok: true, result }));
 }
 

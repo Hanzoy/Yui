@@ -62,28 +62,28 @@ async function loadSkills(skillsRoot = process.env.YUI_SKILLS_ROOT || DEFAULT_SK
 }
 
 function formatSkillForPrompt(skill) {
-  return [
-    `Skill: ${skill.name}`,
-    `Description: ${skill.description}`,
-    skill.body,
-  ].join("\n");
+  return `- ${skill.name}: ${skill.description}`;
 }
 
 function buildSkillInstruction(skills) {
-  const skillDocs = skills.map(formatSkillForPrompt).join("\n\n---\n\n");
+  const skillDocs = skills.map(formatSkillForPrompt).join("\n");
 
   return [
     "你可以使用外部 skills，但不能使用原生 tool_calls。",
-    "需要 skill 时，必须只输出一个 yui-skill 代码块，不要附加解释。",
-    "调用格式如下:",
+    "常驻上下文只包含 skill 的 name 和 description。需要使用某个 skill 时，先加载该 skill 的详细说明，再根据说明执行。",
+    "加载 skill 说明时，必须只输出一个 yui-skill 代码块，不要附加解释:",
+    "```yui-skill",
+    "{\"skill\":\"skill-name\",\"action\":\"load\"}",
+    "```",
+    "拿到 yui-skill-doc 后，如果需要执行 skill，再输出:",
     "```yui-skill",
     "{\"skill\":\"skill-name\",\"input\":{}}",
     "```",
-    "如果一次需要多个 skill，输出 JSON 数组:",
+    "如果一次需要多个请求，输出 JSON 数组:",
     "```yui-skill",
-    "[{\"skill\":\"skill-name\",\"input\":{}},{\"skill\":\"another-skill\",\"input\":{}}]",
+    "[{\"skill\":\"skill-name\",\"action\":\"load\"},{\"skill\":\"another-skill\",\"input\":{}}]",
     "```",
-    "Yui 会运行独立 skill 命令并把 yui-skill-result 结果发回给你。",
+    "Yui 会把加载的说明作为 yui-skill-doc 发回给你，或运行独立 skill 命令并把 yui-skill-result 结果发回给你。",
     "拿到结果后，如果还需要 skill，可以继续按同一格式调用；如果信息足够，请直接给用户最终回答。",
     "",
     "Available skills:",
@@ -103,6 +103,19 @@ async function createSkillRegistry(options = {}) {
     },
     getSkill(name) {
       return skillByName.get(name);
+    },
+    getSkillDoc(name) {
+      const skill = skillByName.get(name);
+
+      if (!skill) {
+        throw new Error(`Unknown skill: ${name}`);
+      }
+
+      return [
+        `Skill: ${skill.name}`,
+        `Description: ${skill.description}`,
+        skill.body,
+      ].join("\n");
     },
     getInstruction() {
       return buildSkillInstruction(skills);

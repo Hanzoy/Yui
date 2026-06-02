@@ -5,6 +5,7 @@ const { createMemoryStore } = require("./chatMemory");
 const { createVectorMemory } = require("./qdrantMemory");
 const { resolveSessionId } = require("./sessionStore");
 const { runSkillAwareChat } = require("./skillChatRunner");
+const { checkSkillLoop } = require("./securityGuard");
 const { createSkillExecutor } = require("./skills/executor");
 const { createSkillRegistry } = require("./skills/registry");
 
@@ -23,9 +24,21 @@ function formatMessageTime(createdAt) {
 
 function formatMessageForModel(message) {
   return {
-    role: message.role,
+    role: toModelRole(message.role),
     content: `[created_at: ${formatMessageTime(message.createdAt)}]\n${message.content}`,
   };
+}
+
+function toModelRole(role) {
+  if (role === "skill_request") {
+    return "assistant";
+  }
+
+  if (role === "skill_response") {
+    return "system";
+  }
+
+  return role;
 }
 
 function buildRelevantMemoryMessage(memories) {
@@ -79,6 +92,22 @@ async function safeSearchRelevantMemories(app, text) {
   }
 }
 
+async function saveGeneratedFlowMessages(app, generatedMessages) {
+  const messagesToSave = generatedMessages.slice(0, -1);
+
+  for (const message of messagesToSave) {
+    if (!message.content) {
+      continue;
+    }
+
+    await app.memoryStore.saveMessage({
+      sessionId: app.sessionId,
+      role: message.flowRole || message.role,
+      content: message.content,
+    });
+  }
+}
+
 class ChatApp extends EventEmitter {
   register(eventName, handler) {
     this.on(eventName, handler);
@@ -124,7 +153,10 @@ function registerDefaultEvents(app) {
       content: text,
     });
     await safeSaveVectorMessage(app, userMessage);
-    const recentMessages = await app.memoryStore.getRecentMessages(app.sessionId, 20);
+    const recentMessages = await app.memoryStore.getMessagesSinceRecentUserInputs(
+      app.sessionId,
+      app.recentUserInputLimit
+    );
     const recentMessagesWithTime = recentMessages.map(formatMessageForModel);
     const contextMessages = [
       ...(relevantMemoryMessage ? [relevantMemoryMessage] : []),
@@ -134,14 +166,16 @@ function registerDefaultEvents(app) {
       },
       {
         role: "system",
-        content: "以下是当前会话最近的聊天记录，每条消息都带有 created_at 时间，请结合这些最近聊天记录和时间来理解上下文并继续回复。",
+        content: `以下是当前会话最近 ${app.recentUserInputLimit} 条用户输入以及这些输入期间产生的所有消息，每条消息都带有 created_at 时间，请结合这些聊天记录和时间来理解上下文并继续回复。`,
       },
       ...recentMessagesWithTime,
     ];
     const result = await runSkillAwareChat(app.chatClient, {
       messages: contextMessages,
+      loadSkillDoc: (skillName) => app.skillRegistry.getSkillDoc(skillName),
       executeSkillRequest: app.skillExecutor.execute,
-      maxSkillRounds: app.maxSkillRounds,
+      skillLoopReviewInterval: app.skillLoopReviewInterval,
+      reviewSkillLoop: checkSkillLoop,
       onBeforeSend: async (payload) => {
         if (!app.debugMode) {
           return;
@@ -152,6 +186,8 @@ function registerDefaultEvents(app) {
         console.log("");
       },
     });
+    const generatedMessages = result.messages.slice(contextMessages.length);
+    await saveGeneratedFlowMessages(app, generatedMessages);
     await app.emitAsync("modelReply", { text: result.content });
   });
 
@@ -241,9 +277,8 @@ async function main() {
     },
   });
   app.relevantMemoryLimit = Number(process.env.QDRANT_MEMORY_LIMIT || 5);
-  app.maxSkillRounds = Number(
-    process.env.YUI_MAX_SKILL_ROUNDS || process.env.YUI_MAX_TOOL_ROUNDS || 5
-  );
+  app.recentUserInputLimit = Number(process.env.YUI_RECENT_USER_INPUT_LIMIT || 20);
+  app.skillLoopReviewInterval = Number(process.env.YUI_SKILL_LOOP_REVIEW_INTERVAL || 10);
   app.sessionId = sessionState.sessionId;
   app.isNewSession = sessionState.isNewSession;
   app.debugMode = false;
