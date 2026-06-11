@@ -1,3 +1,3 @@
 @echo off
 chcp 65001>nul
-ollama run qwen3.5:9b
+call "%~dp0start.cmd" %*

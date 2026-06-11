@@ -62,7 +62,7 @@ function createSecurityClient() {
   });
 }
 
-async function reviewWithSecurityModel(review) {
+async function reviewWithSecurityModel(review, options = {}) {
   if (!isSecurityEnabled()) {
     return {
       allowed: true,
@@ -71,7 +71,7 @@ async function reviewWithSecurityModel(review) {
   }
 
   const prompt = await loadSecurityPrompt();
-  const client = createSecurityClient();
+  const client = options.securityClient || createSecurityClient();
   const response = await client.chat("", {
     includeSoul: false,
     think: false,
@@ -91,11 +91,11 @@ async function reviewWithSecurityModel(review) {
   return parseSecurityDecision(response);
 }
 
-async function assertAllowed(review) {
+async function assertAllowed(review, options = {}) {
   let decision;
 
   try {
-    decision = await reviewWithSecurityModel(review);
+    decision = await reviewWithSecurityModel(review, options);
   } catch (error) {
     throw new SecurityRejectionError(`security review failed: ${error.message}`);
   }
@@ -133,7 +133,7 @@ async function checkSkillOutput({ skillName, input, output }) {
   });
 }
 
-async function checkSkillLoop({ messages, skillCallCount, latestRequests }) {
+async function checkSkillLoop({ messages, skillCallCount, latestRequests, securityClient }) {
   const reviewedMessages = truncateForReview(messages);
   const reviewedRequests = truncateForReview(latestRequests);
 
@@ -145,7 +145,7 @@ async function checkSkillLoop({ messages, skillCallCount, latestRequests }) {
     messagesTruncated: reviewedMessages.truncated,
     latestRequests: reviewedRequests.value,
     latestRequestsTruncated: reviewedRequests.truncated,
-  });
+  }, { securityClient });
 }
 
 module.exports = {

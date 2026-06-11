@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+.git
+.session.json
+qdrant_storage
+services/speech-demo/models
+services/speech-demo/uploads
+services/speech-demo/*.log
+config/ai-models.local.json
+web-server*.log

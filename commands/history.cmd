@@ -1,11 +1,7 @@
 @echo off
 chcp 65001>nul
-set "PGHOST=127.0.0.1"
-set "PGPORT=5432"
-set "PGDATABASE=postgres"
-set "PGUSER=postgres"
-set "PGPASSWORD=6282381"
-set "PGCLIENTENCODING=UTF8"
+call "%~dp0db-up.cmd" || exit /b 1
+call "%~dp0yui-env.cmd"
 
 node "%~dp0..\src\history.js"
 pause

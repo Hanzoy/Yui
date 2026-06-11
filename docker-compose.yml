@@ -1,0 +1,105 @@
+name: yui
+
+services:
+  yui:
+    build:
+      context: .
+    image: yui-app:local
+    container_name: yui-app
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: yui
+      PGUSER: yui
+      PGPASSWORD: yui_dev_password
+      PGCLIENTENCODING: UTF8
+      YUI_VECTOR_PROVIDER: qdrant
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: yui_chat_memory
+      OLLAMA_URL: http://ollama:11434/api/chat
+      OLLAMA_EMBEDDING_URL: http://ollama:11434/api/embed
+      OLLAMA_EMBEDDING_MODEL: bge-m3
+      YUI_WEB_PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - yui_config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  postgres:
+    image: postgres:18
+    container_name: yui-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yui
+      POSTGRES_USER: yui
+      POSTGRES_PASSWORD: yui_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - yui_postgres_18_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yui -d yui"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: yui-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - yui_qdrant_data:/qdrant/storage
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: yui-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - yui_ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: yui-ollama-init
+    restart: "no"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["ollama"]
+    command: ["pull", "bge-m3"]
+
+volumes:
+  yui_config:
+  yui_postgres_18_data:
+  yui_qdrant_data:
+  yui_ollama_data:

@@ -2,10 +2,10 @@ const { Pool } = require("pg");
 
 const DEFAULT_DB_CONFIG = {
   host: process.env.PGHOST || "127.0.0.1",
-  port: Number(process.env.PGPORT || 5432),
-  database: process.env.PGDATABASE || "postgres",
-  user: process.env.PGUSER || "postgres",
-  password: String(process.env.PGPASSWORD ?? ""),
+  port: Number(process.env.PGPORT || 5433),
+  database: process.env.PGDATABASE || "yui",
+  user: process.env.PGUSER || "yui",
+  password: String(process.env.PGPASSWORD ?? "yui_dev_password"),
 };
 
 function createMemoryStore(config = DEFAULT_DB_CONFIG) {
@@ -15,7 +15,7 @@ function createMemoryStore(config = DEFAULT_DB_CONFIG) {
     async initialize() {
       if (!config.password) {
         throw new Error(
-          "PostgreSQL password is missing. Set PGPASSWORD before starting, for example: $env:PGPASSWORD=\"your_password\""
+          "PostgreSQL password is missing. Set PGPASSWORD before starting, or use the Docker defaults from docker-compose.yml."
         );
       }
 
@@ -65,6 +65,30 @@ function createMemoryStore(config = DEFAULT_DB_CONFIG) {
       );
 
       return result.rows.map((row) => ({
+        role: row.role,
+        content: row.content,
+        createdAt: row.created_at,
+      }));
+    },
+    async getRecentMessageRecords(sessionId, limit = 50) {
+      const result = await pool.query(
+        `
+          SELECT id, session_id, role, content, created_at
+          FROM (
+            SELECT id, session_id, role, content, created_at
+            FROM chat_messages
+            WHERE session_id = $1
+            ORDER BY id DESC
+            LIMIT $2
+          ) recent_messages
+          ORDER BY id ASC
+        `,
+        [sessionId, limit]
+      );
+
+      return result.rows.map((row) => ({
+        id: row.id,
+        sessionId: row.session_id,
         role: row.role,
         content: row.content,
         createdAt: row.created_at,

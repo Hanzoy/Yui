@@ -1,0 +1,353 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #1c2430;
+  --muted: #667085;
+  --line: #d9dee7;
+  --user: #0f766e;
+  --assistant: #2b3a55;
+  --danger: #b42318;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft YaHei", sans-serif;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  max-width: 980px;
+  margin: 0 auto;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.topbar p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--text);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--text);
+}
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab {
+  min-width: 76px;
+  height: 36px;
+  background: #fff;
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.tab.active {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+}
+
+.view {
+  display: none;
+  min-height: 0;
+}
+
+.view.active {
+  display: grid;
+}
+
+#chatView {
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 0;
+}
+
+.chat-actions button {
+  min-height: 34px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.messages {
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.message {
+  display: grid;
+  gap: 6px;
+  max-width: 78%;
+  margin-bottom: 18px;
+}
+
+.message.user {
+  margin-left: auto;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.user .meta {
+  text-align: right;
+}
+
+.bubble {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 13px;
+  line-height: 1.55;
+  font-size: 15px;
+}
+
+.user .bubble {
+  color: #fff;
+  background: var(--user);
+  border-color: var(--user);
+}
+
+.assistant .bubble {
+  color: var(--text);
+  background: #f9fafb;
+}
+
+.system .bubble,
+.error .bubble {
+  max-width: 100%;
+  color: var(--danger);
+  background: #fff4f2;
+  border-color: #fecdca;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.composer textarea {
+  width: 100%;
+  max-height: 180px;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 13px;
+  line-height: 1.45;
+  outline: none;
+}
+
+.composer textarea:focus {
+  border-color: var(--user);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.composer button {
+  width: 86px;
+  min-height: 46px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.config-view {
+  overflow-y: auto;
+  padding: 20px;
+  gap: 16px;
+  align-content: start;
+}
+
+.config-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.config-toolbar h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.config-toolbar p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.config-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.model-list {
+  display: grid;
+  gap: 12px;
+}
+
+.model-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.model-card-header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.active-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 650;
+}
+
+.active-choice input {
+  width: auto;
+  min-height: 0;
+}
+
+.model-card-header button {
+  min-height: 32px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--danger);
+  border-color: #fecdca;
+}
+
+.model-field {
+  display: grid;
+  gap: 6px;
+}
+
+.model-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    border: 0;
+  }
+
+  .message {
+    max-width: 92%;
+  }
+
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .composer button {
+    width: 100%;
+  }
+
+  .config-toolbar {
+    display: grid;
+  }
+
+  .config-actions {
+    justify-content: stretch;
+  }
+
+  .config-actions button,
+  .model-card {
+    width: 100%;
+  }
+
+  .model-card {
+    grid-template-columns: 1fr;
+  }
+}

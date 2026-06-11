@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yui</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Yui</h1>
+          <p id="statusText">Connecting...</p>
+        </div>
+        <nav class="view-tabs" aria-label="Views">
+          <button id="chatTab" class="tab active" type="button">Chat</button>
+          <button id="configTab" class="tab" type="button">Models</button>
+        </nav>
+      </header>
+
+      <section id="chatView" class="view active">
+        <div class="chat-actions">
+          <button id="newSessionButton" type="button">New session</button>
+        </div>
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chatForm" class="composer">
+          <textarea
+            id="messageInput"
+            rows="1"
+            placeholder="输入消息..."
+            autocomplete="off"
+          ></textarea>
+          <button id="sendButton" type="submit">Send</button>
+        </form>
+      </section>
+
+      <section id="configView" class="view config-view">
+        <div class="config-toolbar">
+          <div>
+            <h2>AI models</h2>
+            <p>Current chat calls use the active model below.</p>
+          </div>
+          <div class="config-actions">
+            <button id="addLocalButton" type="button">Add local</button>
+            <button id="addDeepSeekButton" type="button">Add DeepSeek</button>
+            <button id="saveModelsButton" type="button">Save</button>
+          </div>
+        </div>
+        <div id="modelList" class="model-list"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

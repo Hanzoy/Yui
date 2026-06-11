@@ -1,14 +1,13 @@
 @echo off
 chcp 65001>nul
-set "PGHOST=127.0.0.1"
-set "PGPORT=5432"
-set "PGDATABASE=postgres"
-set "PGUSER=postgres"
-set "PGPASSWORD=6282381"
-set "PGCLIENTENCODING=UTF8"
-set "YUI_VECTOR_PROVIDER=qdrant"
-set "QDRANT_URL=http://127.0.0.1:6333"
-set "QDRANT_COLLECTION=yui_chat_memory"
-set "OLLAMA_EMBEDDING_MODEL=bge-m3"
+pushd "%~dp0.." >nul
+echo Starting Yui with Docker Compose...
+echo Web UI and API will be available after the app starts:
+echo   Web UI:   http://127.0.0.1:3000
+echo   API base: http://127.0.0.1:3000/api
+echo.
 
-node "%~dp0..\src\start.js" %*
+docker compose up --build yui
+set "YUI_EXIT_CODE=%ERRORLEVEL%"
+popd >nul
+exit /b %YUI_EXIT_CODE%

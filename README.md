@@ -17,15 +17,21 @@
 
 ## 主要文件
 
-- `commands/start.cmd`: 启动聊天程序
-- `commands/start-deepseek.cmd`: 通过 DeepSeek API 启动聊天程序
-- `commands/start-qwen.cmd`: 直接用 Ollama 启动 `qwen3.5:9b`
+- `commands/start.cmd`: 启动 Web 管理页和 HTTP API
+- `commands/start-web.cmd`: `start.cmd` 的兼容别名
+- `commands/stop.cmd`: 停止 Docker 里的 Yui 服务和依赖服务
+- `commands/db-up.cmd`: 启动 Docker 里的 PostgreSQL、Qdrant 和 Ollama embedding 服务
+- `commands/yui-env.cmd`: 本地开发环境变量
 - `commands/history.cmd`: 查看最近 20 条聊天记录
 - `commands/clear-history.cmd`: 清空聊天记录
 - `commands/skill.cmd`: 手动调用单个 skill
+- `Dockerfile`: Yui Web/API 应用镜像
+- `.dockerignore`: Docker 构建上下文排除规则
+- `docker-compose.yml`: 本地 Docker 服务，包含 Yui、PostgreSQL、Qdrant 和 Ollama
 - `skills/`: 每个 skill 一个独立文件夹，包含 `SKILL.md` 和 `scripts/run.js`
-- `src/start.js`: 事件驱动的聊天程序入口
-- `src/modelClient.js`: 根据环境变量选择模型提供商
+- `src/server.js`: Web 管理页和 HTTP API 服务入口
+- `src/chatService.js`: 可复用聊天服务，供 Web 和 HTTP API 共用
+- `src/modelClient.js`: 根据模型配置创建聊天客户端
 - `src/embeddingClient.js`: 通过 Ollama 生成文本向量
 - `src/qdrantMemory.js`: Qdrant 长期记忆存储和相似度检索
 - `src/ollamaClient.js`: 对 Ollama 请求的封装
@@ -38,27 +44,73 @@
 - `src/securityGuard.js`: 独立安全审查模块
 - `src/sessionStore.js`: 保存当前 `session_id`
 - `SECURITY.md`: 安全模块独立提示词
+- `public/`: Web 管理页静态资源
 - `services/speech-demo/src/server.js`: 语音 demo 的 HTTP + WebSocket 入口
 
-## 启动聊天
+## 启动 Web 管理页
 
-先把 `commands/start.cmd` 里的数据库配置改成你自己的，然后运行：
+项目默认使用 Docker 部署 Yui Web/API、PostgreSQL、Qdrant 和 Ollama。其他同学只需要安装并启动 Docker Desktop，然后运行：
 
 ```powershell
 .\commands\start.cmd
 ```
 
-默认会复用上一次的 `session_id`。
-
-如果你想创建一个新的会话，可以这样启动：
+这个命令等价于在仓库根目录运行：
 
 ```powershell
-.\commands\start.cmd new-session
+docker compose up --build yui
 ```
 
-输入 `/debug` 可以打开或关闭调试模式。打开后，每次请求都会在控制台打印发给模型的完整 payload。
+Compose 会按依赖顺序启动：
 
-退出聊天时输入 `/exit` 或 `/quit`。
+1. `postgres`: PostgreSQL 18
+2. `qdrant`: 向量数据库
+3. `ollama`: embedding / 本地聊天模型服务
+4. `ollama-init`: 一次性拉取 `bge-m3`
+5. `yui`: Yui Web/API 应用镜像
+
+命令行会打印两个地址：
+
+- Web 页面：`http://127.0.0.1:3000`
+- 其他应用调用的 API Base URL：`http://127.0.0.1:3000/api`
+
+前端页面和聊天服务是分离的：页面通过 HTTP API 调用后端，其他应用也可以直接调用同一组接口。
+
+停止整套服务：
+
+```powershell
+.\commands\stop.cmd
+```
+
+模型接入方式在 Web 管理页的 `Models` 页面配置。当前支持：
+
+- `Local Ollama`: Docker Compose 内的 Ollama 服务
+- `DeepSeek`: DeepSeek API Key、Base URL 和模型名
+
+当前暴露的接口：
+
+- `GET /api/health`: 服务状态
+- `GET /api/session`: 当前单 session 状态
+- `GET /api/models`: 当前模型配置，API Key 会脱敏
+- `PUT /api/models`: 保存模型配置并切换激活模型
+- `POST /api/session/new`: 新建 session
+- `GET /api/messages?limit=80`: 当前 session 最近消息
+- `POST /api/chat`: 发送消息，JSON body 为 `{ "message": "你好" }`
+
+PostgreSQL 容器配置：
+
+- 容器名：`yui-postgres`
+- 宿主机地址：`127.0.0.1:5433`
+- 容器内地址：`postgres:5432`
+- 数据库：`yui`
+- 用户：`yui`
+- 密码：`yui_dev_password`
+
+这里故意使用宿主机端口 `5433`，避免误连或占用本机直接安装的 PostgreSQL `5432`。
+
+Ollama 也默认运行在 Docker 容器里，并映射到宿主机 `127.0.0.1:11434`。`ollama-init` 会自动检查并下载 embedding 模型 `bge-m3`。
+
+新建会话在 Web 页面点击 `New session`，或调用 `POST /api/session/new`。
 
 ## 启用 Qdrant 长期记忆
 
@@ -66,23 +118,24 @@ Qdrant 用来保存聊天消息的向量，启动聊天时会先用当前输入�
 
 ### 安装和启动 Qdrant
 
-推荐用 Docker 启动本地 Qdrant：
+Qdrant 已经写进 `docker-compose.yml`，会随 `commands/db-up.cmd` 一起启动：
 
 ```powershell
-docker pull qdrant/qdrant
-docker run -p 6333:6333 -p 6334:6334 -v ${PWD}\qdrant_storage:/qdrant/storage qdrant/qdrant
+.\commands\db-up.cmd
 ```
 
 默认 HTTP 地址为：
 
 `http://127.0.0.1:6333`
 
-### 安装 embedding 模型
+### embedding 模型
 
-Qdrant 只存向量，不负责把文字变成向量。当前项目默认用 Ollama 的 `bge-m3` 生成 embedding：
+Qdrant 只存向量，不负责把文字变成向量。当前项目默认用 Docker 里的 Ollama `bge-m3` 生成 embedding。一般不需要手动安装宿主机 Ollama，也不需要手动执行 `ollama pull`。
+
+如果你想手动在容器里拉取模型，可以运行：
 
 ```powershell
-ollama pull bge-m3
+docker compose exec ollama ollama pull bge-m3
 ```
 
 ### 启动时打开 Qdrant 记忆
@@ -91,6 +144,7 @@ ollama pull bge-m3
 $env:YUI_VECTOR_PROVIDER = "qdrant"
 $env:QDRANT_URL = "http://127.0.0.1:6333"
 $env:QDRANT_COLLECTION = "yui_chat_memory"
+$env:OLLAMA_EMBEDDING_URL = "http://127.0.0.1:11434/api/embed"
 $env:OLLAMA_EMBEDDING_MODEL = "bge-m3"
 npm start
 ```
@@ -103,57 +157,30 @@ npm start
 
 如果不设置 `YUI_VECTOR_PROVIDER=qdrant`、`QDRANT_ENABLED=true` 或 `QDRANT_URL`，长期记忆会保持关闭，聊天仍然只使用 PostgreSQL 最近记录。
 
-`commands/start.cmd`、`commands/start-deepseek.cmd` 和 `commands/clear-history.cmd` 已经默认写入本地 Qdrant 配置：
+`commands/start.cmd` 和 `commands/clear-history.cmd` 已经默认写入本地 Qdrant 配置：
 
 ```cmd
 set "YUI_VECTOR_PROVIDER=qdrant"
 set "QDRANT_URL=http://127.0.0.1:6333"
 set "QDRANT_COLLECTION=yui_chat_memory"
+set "OLLAMA_EMBEDDING_URL=http://127.0.0.1:11434/api/embed"
 set "OLLAMA_EMBEDDING_MODEL=bge-m3"
 ```
 
-## 启动 Qwen
+## 配置 AI 模型
 
-如果你想直接通过 Ollama 启动 `qwen3.5:9b`，可以运行：
+打开 Web 管理页后进入 `Models` 页面配置模型。当前支持两类模型：
 
-```powershell
-.\commands\start-qwen.cmd
-```
+- `Local Ollama`: 默认连接 Docker Compose 内部 Ollama，地址为 `http://ollama:11434/api/chat`
+- `DeepSeek`: 填写 DeepSeek API Key、Base URL 和模型名
 
-它等价于：
-
-```powershell
-ollama run qwen3.5:9b
-```
-
-## 启动 DeepSeek
-
-DeepSeek API 使用 OpenAI 兼容的 Chat Completions 格式。先设置 API Key：
+如果使用本地 Ollama 聊天模型，需要先把聊天模型拉进 Docker 容器，例如：
 
 ```powershell
-$env:DEEPSEEK_API_KEY = "sk-..."
+docker compose exec ollama ollama pull qwen3.5:9b
 ```
 
-然后运行：
-
-```powershell
-.\commands\start-deepseek.cmd
-```
-
-这个脚本同样会启用 Qdrant 长期记忆；DeepSeek 负责聊天回复，Ollama 的 `bge-m3` 负责生成 embedding。
-
-默认模型为 `deepseek-v4-pro`。如果要切换模型，可以设置：
-
-```powershell
-$env:DEEPSEEK_MODEL = "deepseek-v4-flash"
-```
-
-也可以不使用专门脚本，直接在启动前指定 provider：
-
-```powershell
-$env:YUI_MODEL_PROVIDER = "deepseek"
-npm start
-```
+DeepSeek 的 token 不再通过启动命令或环境变量设置，而是在 `Models` 页面保存到本地 `config/ai-models.local.json`。这个文件已加入 `.gitignore`，不会提交到仓库。
 
 ## 底层调用
 
@@ -296,15 +323,9 @@ Skill 可以手动调试：
 
 它不使用 `SOUL.md`，也不继承 Yui 的人格提示词。
 
-默认安全审查继承当前聊天模型提供商，并强制非思考模式以减少延迟：
+默认安全审查继承当前 Web `Models` 页面激活的聊天模型，并强制非思考模式以减少延迟。
 
-```text
-start.cmd: 使用本地 Ollama / Qwen
-start-deepseek.cmd: 使用 DeepSeek
-think: false
-```
-
-也就是说，如果当前聊天是本地 Qwen，安全模块也用本地 Qwen；如果当前聊天是 DeepSeek，安全模块也用 DeepSeek 非思考模式。
+也就是说，如果当前激活模型是本地 Qwen，安全模块也用本地 Qwen；如果当前激活模型是 DeepSeek，安全模块也用 DeepSeek 非思考模式。
 
 可选环境变量：
 

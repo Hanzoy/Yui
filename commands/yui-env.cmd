@@ -1,0 +1,13 @@
+@echo off
+set "PGHOST=127.0.0.1"
+set "PGPORT=5433"
+set "PGDATABASE=yui"
+set "PGUSER=yui"
+set "PGPASSWORD=yui_dev_password"
+set "PGCLIENTENCODING=UTF8"
+set "YUI_VECTOR_PROVIDER=qdrant"
+set "QDRANT_URL=http://127.0.0.1:6333"
+set "QDRANT_COLLECTION=yui_chat_memory"
+set "OLLAMA_URL=http://127.0.0.1:11434/api/chat"
+set "OLLAMA_EMBEDDING_URL=http://127.0.0.1:11434/api/embed"
+set "OLLAMA_EMBEDDING_MODEL=bge-m3"

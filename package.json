@@ -2,9 +2,10 @@
   "name": "yui",
   "version": "1.0.0",
   "description": "这是一个本地 `Ollama + Node.js + PostgreSQL` 的简单 demo。",
-  "main": "src/start.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node src/start.js",
+    "start": "node src/server.js",
+    "web": "node src/server.js",
     "skill": "node src/skillCommand.js",
     "speech-demo": "node services/speech-demo/src/server.js",
     "speech-demo:models": "powershell -ExecutionPolicy Bypass -File ./services/speech-demo/scripts/download-models.ps1",

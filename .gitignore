@@ -5,3 +5,4 @@ services/speech-demo/models/
 services/speech-demo/uploads/
 services/speech-demo/*.log
 qdrant_storage/
+config/ai-models.local.json

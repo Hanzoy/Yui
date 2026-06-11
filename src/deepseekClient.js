@@ -12,7 +12,7 @@ function readApiKey(options = {}) {
 
   if (!apiKey) {
     throw new Error(
-      "DeepSeek API key is missing. Set DEEPSEEK_API_KEY before starting."
+      "DeepSeek API key is missing. Configure it in the Web UI Models page."
     );
   }
 
