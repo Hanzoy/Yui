@@ -1,6 +1,11 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { createDefaultChatClient } = require("./modelClient");
+const {
+  createChatClientOptions,
+  getSecurityModel,
+  readModelConfig,
+} = require("./modelConfigStore");
 
 const DEFAULT_SECURITY_PROMPT_PATH = path.join(__dirname, "..", "SECURITY.md");
 const DEFAULT_MAX_REVIEW_CHARS = 12000;
@@ -17,8 +22,8 @@ async function loadSecurityPrompt(promptPath = process.env.YUI_SECURITY_PROMPT |
   return fs.readFile(promptPath, "utf8");
 }
 
-function isSecurityEnabled() {
-  return process.env.YUI_SECURITY_ENABLED !== "false";
+function isSecurityEnabled(modelConfig) {
+  return modelConfig?.security?.enabled !== false;
 }
 
 function truncateForReview(value) {
@@ -49,21 +54,32 @@ function parseSecurityDecision(text) {
   };
 }
 
-function createSecurityClient() {
-  const inheritedProvider =
-    process.env.YUI_MODEL_PROVIDER || process.env.MODEL_PROVIDER || "ollama";
+function createSecurityClient(modelConfig) {
+  return createDefaultChatClient(
+    createChatClientOptions(getSecurityModel(modelConfig))
+  );
+}
 
-  return createDefaultChatClient({
-    provider: process.env.YUI_SECURITY_MODEL_PROVIDER || inheritedProvider,
-    model: process.env.YUI_SECURITY_MODEL,
-    baseUrl: process.env.YUI_SECURITY_DEEPSEEK_BASE_URL,
-    apiKey: process.env.YUI_SECURITY_DEEPSEEK_API_KEY,
-    ollamaUrl: process.env.YUI_SECURITY_OLLAMA_URL,
+async function emitSecurityEvent(options, event) {
+  if (typeof options.onEvent !== "function") {
+    return;
+  }
+
+  await options.onEvent({
+    ...event,
+    source: "security",
   });
 }
 
 async function reviewWithSecurityModel(review, options = {}) {
-  if (!isSecurityEnabled()) {
+  const modelConfig = options.modelConfig || (await readModelConfig());
+
+  if (!isSecurityEnabled(modelConfig)) {
+    await emitSecurityEvent(options, {
+      type: "security.skipped",
+      phase: review.phase,
+      reason: "安全审查已关闭",
+    });
     return {
       allowed: true,
       reason: "security disabled",
@@ -71,24 +87,50 @@ async function reviewWithSecurityModel(review, options = {}) {
   }
 
   const prompt = await loadSecurityPrompt();
-  const client = options.securityClient || createSecurityClient();
-  const response = await client.chat("", {
-    includeSoul: false,
-    think: false,
-    temperature: 0,
-    messages: [
-      {
-        role: "system",
-        content: prompt,
-      },
-      {
-        role: "user",
-        content: JSON.stringify(review, null, 2),
-      },
-    ],
+  const client = options.securityClient || createSecurityClient(modelConfig);
+  await emitSecurityEvent(options, {
+    type: "security.started",
+    phase: review.phase,
+    provider: client.provider,
+    model: client.model,
   });
 
-  return parseSecurityDecision(response);
+  try {
+    const response = await client.chat("", {
+      includeSoul: false,
+      think: false,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content: prompt,
+        },
+        {
+          role: "user",
+          content: JSON.stringify(review, null, 2),
+        },
+      ],
+    });
+    const decision = parseSecurityDecision(response);
+    await emitSecurityEvent(options, {
+      type: "security.completed",
+      phase: review.phase,
+      provider: client.provider,
+      model: client.model,
+      allowed: decision.allowed,
+      reason: decision.reason,
+    });
+    return decision;
+  } catch (error) {
+    await emitSecurityEvent(options, {
+      type: "security.failed",
+      phase: review.phase,
+      provider: client.provider,
+      model: client.model,
+      error: error.message,
+    });
+    throw error;
+  }
 }
 
 async function assertAllowed(review, options = {}) {
@@ -107,7 +149,7 @@ async function assertAllowed(review, options = {}) {
   return decision;
 }
 
-async function checkSkillInput({ skillName, input, context }) {
+async function checkSkillInput({ skillName, input, context }, options = {}) {
   const reviewedInput = truncateForReview(input);
   return assertAllowed({
     phase: "input",
@@ -117,10 +159,10 @@ async function checkSkillInput({ skillName, input, context }) {
     context: {
       sessionId: context?.sessionId,
     },
-  });
+  }, options);
 }
 
-async function checkSkillOutput({ skillName, input, output }) {
+async function checkSkillOutput({ skillName, input, output }, options = {}) {
   const reviewedInput = truncateForReview(input);
   const reviewedOutput = truncateForReview(output);
   return assertAllowed({
@@ -130,10 +172,17 @@ async function checkSkillOutput({ skillName, input, output }) {
     inputTruncated: reviewedInput.truncated,
     output: reviewedOutput.value,
     outputTruncated: reviewedOutput.truncated,
-  });
+  }, options);
 }
 
-async function checkSkillLoop({ messages, skillCallCount, latestRequests, securityClient }) {
+async function checkSkillLoop({
+  messages,
+  skillCallCount,
+  latestRequests,
+  securityClient,
+  modelConfig,
+  onEvent,
+}) {
   const reviewedMessages = truncateForReview(messages);
   const reviewedRequests = truncateForReview(latestRequests);
 
@@ -145,7 +194,7 @@ async function checkSkillLoop({ messages, skillCallCount, latestRequests, securi
     messagesTruncated: reviewedMessages.truncated,
     latestRequests: reviewedRequests.value,
     latestRequestsTruncated: reviewedRequests.truncated,
-  }, { securityClient });
+  }, { securityClient, modelConfig, onEvent });
 }
 
 module.exports = {
@@ -154,6 +203,8 @@ module.exports = {
   checkSkillInput,
   checkSkillLoop,
   checkSkillOutput,
+  createSecurityClient,
   isSecurityEnabled,
   parseSecurityDecision,
+  reviewWithSecurityModel,
 };

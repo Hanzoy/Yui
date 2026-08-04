@@ -96,6 +96,7 @@ Compose 会按依赖顺序启动：
 - `POST /api/session/new`: 新建 session
 - `GET /api/messages?limit=80`: 当前 session 最近消息
 - `POST /api/chat`: 发送消息，JSON body 为 `{ "message": "你好" }`
+- `POST /api/chat/stream`: 流式发送消息，使用 Server-Sent Events 返回执行轨迹和最终结果
 
 PostgreSQL 容器配置：
 
@@ -169,7 +170,7 @@ set "OLLAMA_EMBEDDING_MODEL=bge-m3"
 
 ## 配置 AI 模型
 
-打开 Web 管理页后进入 `Models` 页面配置模型。当前支持两类模型：
+打开 Web 管理页后进入“模型与安全”页面配置模型。当前支持两类模型：
 
 - `Local Ollama`: 默认连接 Docker Compose 内部 Ollama，地址为 `http://ollama:11434/api/chat`
 - `DeepSeek`: 填写 DeepSeek API Key、Base URL 和模型名
@@ -180,7 +181,14 @@ set "OLLAMA_EMBEDDING_MODEL=bge-m3"
 docker compose exec ollama ollama pull qwen3.5:9b
 ```
 
-DeepSeek 的 token 不再通过启动命令或环境变量设置，而是在 `Models` 页面保存到本地 `config/ai-models.local.json`。这个文件已加入 `.gitignore`，不会提交到仓库。
+DeepSeek 的 token 不再通过启动命令或环境变量设置，而是在“模型与安全”页面保存到本地 `config/ai-models.local.json`。这个文件已加入 `.gitignore`，不会提交到仓库。
+
+每个模型连接都可以被分配到两个独立角色：
+
+- 对话模型：负责理解用户消息、发起 Skill 请求和生成最终回答。
+- 安全审查模型：负责检查 Skill 输入、输出和调用循环，可以与对话模型相同，也可以单独选择。
+
+保存后两个角色都会立即切换，无需重启服务。页面中的“对话与执行”视图会实时显示记忆检索、上下文组装、模型轮次、Skill 调用以及安全审查过程。
 
 ## 底层调用
 
@@ -323,25 +331,16 @@ Skill 可以手动调试：
 
 它不使用 `SOUL.md`，也不继承 Yui 的人格提示词。
 
-默认安全审查继承当前 Web `Models` 页面激活的聊天模型，并强制非思考模式以减少延迟。
+安全审查模型在 Web“模型与安全”页面独立选择，并强制非思考模式以减少延迟。旧配置首次读取时会把当前对话模型作为安全审查模型；保存后会持久化独立选择，不再隐式回落到本地 Ollama。
 
-也就是说，如果当前激活模型是本地 Qwen，安全模块也用本地 Qwen；如果当前激活模型是 DeepSeek，安全模块也用 DeepSeek 非思考模式。
-
-可选环境变量：
+首次创建配置时仍可用环境变量决定安全审查是否默认启用：
 
 ```powershell
 $env:YUI_SECURITY_ENABLED = "true"
-$env:YUI_SECURITY_MODEL_PROVIDER = "deepseek"
-$env:YUI_SECURITY_MODEL = "deepseek-v4-pro"
-$env:YUI_SECURITY_OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 $env:YUI_SECURITY_MAX_REVIEW_CHARS = "12000"
 ```
 
-如果要临时关闭安全审查：
-
-```powershell
-$env:YUI_SECURITY_ENABLED = "false"
-```
+后续启停和模型切换都在 Web 页面完成。
 
 安全审查失败时默认 fail closed，也就是拒绝执行或拒绝返回结果。
 

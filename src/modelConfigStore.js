@@ -24,6 +24,10 @@ function createDefaultConfig() {
   return {
     activeModelId: defaultModel.id,
     models: [defaultModel],
+    security: {
+      enabled: process.env.YUI_SECURITY_ENABLED !== "false",
+      modelId: defaultModel.id,
+    },
   };
 }
 
@@ -88,7 +92,7 @@ function normalizeModel(model) {
   return normalized;
 }
 
-function normalizeConfig(config) {
+function normalizeConfig(config = {}) {
   const rawModels = Array.isArray(config.models) ? config.models : [];
   const models = rawModels.length
     ? rawModels.map(normalizeModel)
@@ -96,10 +100,23 @@ function normalizeConfig(config) {
   const activeModelId = models.some((model) => model.id === config.activeModelId)
     ? config.activeModelId
     : models[0].id;
+  const rawSecurity = config.security || {};
+  const requestedSecurityModelId =
+    rawSecurity.modelId || config.securityModelId || activeModelId;
+  const securityModelId = models.some((model) => model.id === requestedSecurityModelId)
+    ? requestedSecurityModelId
+    : activeModelId;
 
   return {
     activeModelId,
     models,
+    security: {
+      enabled:
+        typeof rawSecurity.enabled === "boolean"
+          ? rawSecurity.enabled
+          : process.env.YUI_SECURITY_ENABLED !== "false",
+      modelId: securityModelId,
+    },
   };
 }
 
@@ -109,6 +126,26 @@ function getActiveModel(config) {
     normalized.models.find((model) => model.id === normalized.activeModelId) ||
     normalized.models[0]
   );
+}
+
+function getSecurityModel(config) {
+  const normalized = normalizeConfig(config);
+  return (
+    normalized.models.find((model) => model.id === normalized.security.modelId) ||
+    getActiveModel(normalized)
+  );
+}
+
+function getSecurityStatus(config) {
+  const normalized = normalizeConfig(config);
+  const model = getSecurityModel(normalized);
+
+  return {
+    enabled: normalized.security.enabled,
+    modelId: model.id,
+    provider: model.provider,
+    model: model.model,
+  };
 }
 
 function redactModel(model) {
@@ -128,6 +165,7 @@ function redactConfig(config) {
   return {
     activeModelId: normalized.activeModelId,
     models: normalized.models.map(redactModel),
+    security: normalized.security,
   };
 }
 
@@ -153,6 +191,9 @@ module.exports = {
   createChatClientOptions,
   createDefaultConfig,
   getActiveModel,
+  getSecurityModel,
+  getSecurityStatus,
+  normalizeConfig,
   readModelConfig,
   redactConfig,
   writeModelConfig,

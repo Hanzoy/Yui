@@ -5,6 +5,7 @@ const { createDefaultChatClient } = require("./modelClient");
 const {
   createChatClientOptions,
   getActiveModel,
+  getSecurityStatus,
   readModelConfig,
   redactConfig,
   writeModelConfig,
@@ -22,6 +23,27 @@ function normalizeLimit(value, fallback = 50) {
   return Math.min(Math.max(Math.trunc(limit), 1), 200);
 }
 
+function buildChatResponse(result) {
+  return {
+    sessionId: result.sessionId,
+    userMessage: result.userMessage,
+    assistantMessage: result.assistantMessage,
+    reply: result.reply,
+    relevantMemories: result.relevantMemories,
+    skillRounds: result.skillRounds,
+    skillCallCount: result.skillCallCount,
+    execution: result.execution,
+  };
+}
+
+function sendServerEvent(res, eventName, data) {
+  if (res.destroyed || res.writableEnded) {
+    return;
+  }
+
+  res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 async function createServer() {
   const app = express();
   const publicDir = path.join(__dirname, "..", "public");
@@ -29,6 +51,7 @@ async function createServer() {
   let service = await createChatService({
     ...(await resolveSessionId(process.argv.slice(2))),
     chatClient: createDefaultChatClient(createChatClientOptions(getActiveModel(modelConfig))),
+    security: getSecurityStatus(modelConfig),
   });
   let queue = Promise.resolve();
 
@@ -40,7 +63,7 @@ async function createServer() {
 
   app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", process.env.YUI_CORS_ORIGIN || "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
     if (req.method === "OPTIONS") {
@@ -91,11 +114,15 @@ async function createServer() {
       const savedConfig = await writeModelConfig({
         activeModelId: req.body?.activeModelId,
         models: mergedModels,
+        security: req.body?.security,
       });
       modelConfig = savedConfig;
-      service.chatClient = createDefaultChatClient(
-        createChatClientOptions(getActiveModel(modelConfig))
-      );
+      service.setRuntimeModels({
+        chatClient: createDefaultChatClient(
+          createChatClientOptions(getActiveModel(modelConfig))
+        ),
+        security: getSecurityStatus(modelConfig),
+      });
       res.json(redactConfig(modelConfig));
     } catch (error) {
       next(error);
@@ -111,6 +138,7 @@ async function createServer() {
           chatClient: createDefaultChatClient(
             createChatClientOptions(getActiveModel(modelConfig))
           ),
+          security: getSecurityStatus(modelConfig),
         });
         return service.getStatus();
       });
@@ -144,21 +172,59 @@ async function createServer() {
       }
 
       const result = await enqueue(() => service.sendMessage(message));
-      res.json({
-        sessionId: result.sessionId,
-        userMessage: result.userMessage,
-        assistantMessage: result.assistantMessage,
-        reply: result.reply,
-        relevantMemories: result.relevantMemories,
-        skillCallCount: result.skillCallCount,
-      });
+      res.json(buildChatResponse(result));
     } catch (error) {
       next(error);
     }
   });
 
+  app.post("/api/chat/stream", async (req, res) => {
+    const message = String(req.body?.message || "").trim();
+
+    if (!message) {
+      res.status(400).json({
+        error: "message is required",
+      });
+      return;
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+    sendServerEvent(res, "trace", {
+      type: "queue.waiting",
+      at: new Date().toISOString(),
+    });
+
+    try {
+      const result = await enqueue(() =>
+        service.sendMessage(message, {
+          onEvent: (event) => sendServerEvent(res, "trace", event),
+        })
+      );
+      sendServerEvent(res, "complete", buildChatResponse(result));
+    } catch (error) {
+      console.error(error);
+      sendServerEvent(res, "error", {
+        error: error.message,
+        execution: error.execution,
+      });
+    } finally {
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
+  });
+
   app.use((error, req, res, next) => {
     console.error(error);
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
     res.status(500).json({
       error: error.message,
     });
@@ -188,5 +254,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildChatResponse,
   createServer,
+  sendServerEvent,
 };

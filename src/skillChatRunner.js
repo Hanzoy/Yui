@@ -1,5 +1,23 @@
 const DEFAULT_SKILL_LOOP_REVIEW_INTERVAL = 10;
 const SKILL_BLOCK_PATTERN = /```yui-skill\s*([\s\S]*?)```/g;
+const MAX_EVENT_DETAIL_CHARS = 4000;
+
+function eventDetail(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  return text.length > MAX_EVENT_DETAIL_CHARS
+    ? `${text.slice(0, MAX_EVENT_DETAIL_CHARS)}\n…`
+    : text;
+}
+
+async function emitEvent(options, event) {
+  if (typeof options.onEvent === "function") {
+    await options.onEvent(event);
+  }
+}
 
 function normalizeAssistantMessage(message) {
   return {
@@ -53,9 +71,22 @@ function buildSkillResponseMessage(responses) {
 async function handleSkillRequests(requests, options = {}) {
   return Promise.all(
     requests.map(async (request) => {
+      await emitEvent(options, {
+        type: "skill.started",
+        skill: request.skill,
+        action: request.action,
+        detail: eventDetail(request.input),
+      });
+
       try {
         if (request.action === "load") {
           const doc = await options.loadSkillDoc(request.skill);
+          await emitEvent(options, {
+            type: "skill.completed",
+            skill: request.skill,
+            action: "load",
+            detail: eventDetail(doc),
+          });
           return {
             skill: request.skill,
             action: "load",
@@ -64,7 +95,15 @@ async function handleSkillRequests(requests, options = {}) {
           };
         }
 
-        const result = await options.executeSkillRequest(request);
+        const result = await options.executeSkillRequest(request, {
+          onEvent: (event) => emitEvent(options, event),
+        });
+        await emitEvent(options, {
+          type: "skill.completed",
+          skill: request.skill,
+          action: "run",
+          detail: eventDetail(result),
+        });
         return {
           skill: request.skill,
           action: "run",
@@ -72,6 +111,12 @@ async function handleSkillRequests(requests, options = {}) {
           result,
         };
       } catch (error) {
+        await emitEvent(options, {
+          type: "skill.failed",
+          skill: request.skill,
+          action: request.action,
+          error: error.message,
+        });
         return {
           skill: request.skill,
           action: request.action,
@@ -91,6 +136,12 @@ async function runSkillAwareChat(chatClient, options = {}) {
   let nextReviewAt = reviewInterval;
 
   for (let round = 0; ; round += 1) {
+    await emitEvent(options, {
+      type: "model.started",
+      round: round + 1,
+      provider: chatClient.provider,
+      model: chatClient.model,
+    });
     const assistantMessage = normalizeAssistantMessage(
       await chatClient.createMessage("", {
         messages: messages.map(toModelMessage),
@@ -104,6 +155,16 @@ async function runSkillAwareChat(chatClient, options = {}) {
     }
 
     messages.push(assistantMessage);
+    await emitEvent(options, {
+      type: "model.completed",
+      round: round + 1,
+      provider: chatClient.provider,
+      model: chatClient.model,
+      skillRequestCount: skillRequests.length,
+      detail: skillRequests.length
+        ? eventDetail(skillRequests)
+        : eventDetail(assistantMessage.content),
+    });
 
     if (!skillRequests.length) {
       return {
@@ -125,10 +186,18 @@ async function runSkillAwareChat(chatClient, options = {}) {
       }
 
       if (typeof options.reviewSkillLoop === "function") {
+        await emitEvent(options, {
+          type: "loop-review.started",
+          skillCallCount,
+        });
         await options.reviewSkillLoop({
           messages,
           skillCallCount,
           latestRequests: skillRequests,
+        });
+        await emitEvent(options, {
+          type: "loop-review.completed",
+          skillCallCount,
         });
       }
     }

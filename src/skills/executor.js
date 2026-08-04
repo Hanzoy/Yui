@@ -2,6 +2,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const DEFAULT_SKILL_COMMAND_PATH = path.join(__dirname, "..", "skillCommand.js");
+const EVENT_PREFIX = "YUI_EVENT:";
 
 function getContextValue(context, key) {
   const value = context[key];
@@ -30,6 +31,7 @@ function runSkillCommand(skillName, payload, options = {}) {
     });
     let stdout = "";
     let stderr = "";
+    let stderrBuffer = "";
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error(`Skill command timed out: ${skillName}`));
@@ -39,7 +41,21 @@ function runSkillCommand(skillName, payload, options = {}) {
       stdout += chunk.toString();
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      const lines = `${stderrBuffer}${chunk.toString()}`.split(/\r?\n/);
+      stderrBuffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith(EVENT_PREFIX)) {
+          try {
+            const event = JSON.parse(line.slice(EVENT_PREFIX.length));
+            options.onEvent?.(event);
+          } catch (error) {
+            stderr += `Invalid execution event: ${error.message}\n`;
+          }
+        } else if (line) {
+          stderr += `${line}\n`;
+        }
+      }
     });
     child.on("error", (error) => {
       clearTimeout(timer);
@@ -47,6 +63,17 @@ function runSkillCommand(skillName, payload, options = {}) {
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+
+      if (stderrBuffer.startsWith(EVENT_PREFIX)) {
+        try {
+          const event = JSON.parse(stderrBuffer.slice(EVENT_PREFIX.length));
+          options.onEvent?.(event);
+        } catch (error) {
+          stderr += `Invalid execution event: ${error.message}\n`;
+        }
+      } else {
+        stderr += stderrBuffer;
+      }
 
       let parsed;
       try {
@@ -69,7 +96,7 @@ function runSkillCommand(skillName, payload, options = {}) {
 }
 
 function createSkillExecutor(registry, context = {}) {
-  async function execute(request) {
+  async function execute(request, executionOptions = {}) {
     const skill = registry.getSkill(request.skill);
 
     if (!skill) {
@@ -82,6 +109,7 @@ function createSkillExecutor(registry, context = {}) {
       {
         commandPath: context.commandPath,
         timeoutMs: context.timeoutMs,
+        onEvent: executionOptions.onEvent,
       }
     );
   }

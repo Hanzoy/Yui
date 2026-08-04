@@ -3,55 +3,205 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Yui</title>
+    <meta
+      name="description"
+      content="Yui 本地 AI 工作台：对话、执行轨迹、模型与安全审查配置。"
+    />
+    <title>Yui · AI 工作台</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div>
-          <h1>Yui</h1>
-          <p id="statusText">Connecting...</p>
-        </div>
-        <nav class="view-tabs" aria-label="Views">
-          <button id="chatTab" class="tab active" type="button">Chat</button>
-          <button id="configTab" class="tab" type="button">Models</button>
-        </nav>
-      </header>
-
-      <section id="chatView" class="view active">
-        <div class="chat-actions">
-          <button id="newSessionButton" type="button">New session</button>
-        </div>
-        <section id="messages" class="messages" aria-live="polite"></section>
-
-        <form id="chatForm" class="composer">
-          <textarea
-            id="messageInput"
-            rows="1"
-            placeholder="输入消息..."
-            autocomplete="off"
-          ></textarea>
-          <button id="sendButton" type="submit">Send</button>
-        </form>
-      </section>
-
-      <section id="configView" class="view config-view">
-        <div class="config-toolbar">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">Y</div>
           <div>
-            <h2>AI models</h2>
-            <p>Current chat calls use the active model below.</p>
-          </div>
-          <div class="config-actions">
-            <button id="addLocalButton" type="button">Add local</button>
-            <button id="addDeepSeekButton" type="button">Add DeepSeek</button>
-            <button id="saveModelsButton" type="button">Save</button>
+            <strong>Yui</strong>
+            <span>AI workspace</span>
           </div>
         </div>
-        <div id="modelList" class="model-list"></div>
-      </section>
-    </main>
 
+        <nav class="primary-nav" aria-label="主导航">
+          <button class="nav-item active" data-view="chat" type="button">
+            <span class="nav-icon" aria-hidden="true">⌁</span>
+            <span>对话与执行</span>
+          </button>
+          <button class="nav-item" data-view="config" type="button">
+            <span class="nav-icon" aria-hidden="true">◇</span>
+            <span>模型与安全</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-status">
+          <div class="service-state">
+            <span id="serviceDot" class="status-dot pending" aria-hidden="true"></span>
+            <div>
+              <strong id="serviceLabel">正在连接</strong>
+              <span id="sessionShort">—</span>
+            </div>
+          </div>
+          <div class="runtime-mini">
+            <span>对话</span>
+            <strong id="chatModelMini">—</strong>
+          </div>
+          <div class="runtime-mini">
+            <span>审查</span>
+            <strong id="securityModelMini">—</strong>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-surface">
+        <section id="chatView" class="view active" aria-labelledby="chatTitle">
+          <div class="chat-layout">
+            <section class="conversation-panel">
+              <header class="surface-header">
+                <div>
+                  <p class="eyebrow">CONVERSATION</p>
+                  <h1 id="chatTitle">和 Yui 一起处理事情</h1>
+                  <p id="statusText" class="header-description">
+                    正在读取运行状态…
+                  </p>
+                </div>
+                <button id="newSessionButton" class="quiet-button" type="button">
+                  <span aria-hidden="true">＋</span>
+                  新会话
+                </button>
+              </header>
+
+              <section
+                id="messages"
+                class="messages"
+                aria-live="polite"
+                aria-label="对话消息"
+              ></section>
+
+              <form id="chatForm" class="composer">
+                <div class="composer-input">
+                  <textarea
+                    id="messageInput"
+                    rows="1"
+                    placeholder="告诉 Yui 你想完成什么…"
+                    autocomplete="off"
+                    aria-label="消息"
+                  ></textarea>
+                  <span>Enter 发送 · Shift + Enter 换行</span>
+                </div>
+                <button id="sendButton" class="send-button" type="submit">
+                  <span>发送</span>
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </form>
+            </section>
+
+            <aside class="execution-panel" aria-labelledby="executionTitle">
+              <header class="execution-header">
+                <div>
+                  <p class="eyebrow">LIVE TRACE</p>
+                  <h2 id="executionTitle">执行轨迹</h2>
+                </div>
+                <div id="executionState" class="trace-state idle">
+                  <span></span>
+                  <strong>等待任务</strong>
+                </div>
+              </header>
+
+              <div class="trace-summary">
+                <div>
+                  <span>步骤</span>
+                  <strong id="traceStepCount">0</strong>
+                </div>
+                <div>
+                  <span>Skill</span>
+                  <strong id="traceSkillCount">0</strong>
+                </div>
+                <div>
+                  <span>耗时</span>
+                  <strong id="traceDuration">—</strong>
+                </div>
+              </div>
+
+              <section
+                id="executionTimeline"
+                class="execution-timeline"
+                aria-live="polite"
+              ></section>
+            </aside>
+          </div>
+        </section>
+
+        <section id="configView" class="view config-view" aria-labelledby="configTitle">
+          <header class="config-header">
+            <div>
+              <p class="eyebrow">CONTROL CENTER</p>
+              <h1 id="configTitle">模型与安全</h1>
+              <p>将模型连接保存在一个地方，并分别指定对话与安全审查角色。</p>
+            </div>
+            <div class="config-header-actions">
+              <span id="saveState" class="save-state">尚未修改</span>
+              <button id="saveModelsButton" class="primary-button" type="button">
+                保存并应用
+              </button>
+            </div>
+          </header>
+
+          <div class="config-content">
+            <section class="role-grid" aria-label="运行角色">
+              <article class="role-card chat-role">
+                <div class="role-card-top">
+                  <span class="role-symbol" aria-hidden="true">Y</span>
+                  <span class="role-badge">对话引擎</span>
+                </div>
+                <h2>Yui 使用哪个模型？</h2>
+                <p>负责理解消息、决定是否调用 Skill，并生成最终回答。</p>
+                <label class="select-field">
+                  <span>当前对话模型</span>
+                  <select id="chatModelSelect"></select>
+                </label>
+              </article>
+
+              <article class="role-card security-role">
+                <div class="role-card-top">
+                  <span class="role-symbol shield" aria-hidden="true">✓</span>
+                  <label class="toggle-control">
+                    <input id="securityEnabled" type="checkbox" />
+                    <span></span>
+                    <strong>安全审查</strong>
+                  </label>
+                </div>
+                <h2>谁来审查 Skill？</h2>
+                <p>独立检查 Skill 输入、输出和循环状态，不再隐式回落到本地模型。</p>
+                <label class="select-field">
+                  <span>安全审查模型</span>
+                  <select id="securityModelSelect"></select>
+                </label>
+              </article>
+            </section>
+
+            <section class="model-section" aria-labelledby="modelSectionTitle">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">MODEL CONNECTIONS</p>
+                  <h2 id="modelSectionTitle">模型连接</h2>
+                  <p>API Key 只写入本地配置，页面再次读取时会自动脱敏。</p>
+                </div>
+                <div class="add-actions">
+                  <button id="addLocalButton" class="quiet-button" type="button">
+                    ＋ 本地 Ollama
+                  </button>
+                  <button id="addDeepSeekButton" class="quiet-button" type="button">
+                    ＋ DeepSeek
+                  </button>
+                </div>
+              </div>
+              <div id="modelList" class="model-list"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="/app.js"></script>
   </body>
 </html>

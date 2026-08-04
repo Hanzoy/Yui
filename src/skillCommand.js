@@ -2,6 +2,8 @@ const path = require("path");
 const { DEFAULT_SKILLS_ROOT } = require("./skills/registry");
 const { checkSkillInput, checkSkillOutput } = require("./securityGuard");
 
+const EVENT_PREFIX = "YUI_EVENT:";
+
 async function readStdin() {
   const chunks = [];
 
@@ -10,6 +12,10 @@ async function readStdin() {
   }
 
   return Buffer.concat(chunks).toString("utf8");
+}
+
+function emitEvent(event) {
+  process.stderr.write(`${EVENT_PREFIX}${JSON.stringify(event)}\n`);
 }
 
 async function run() {
@@ -37,7 +43,7 @@ async function run() {
     skillName,
     input,
     context,
-  });
+  }, { onEvent: emitEvent });
 
   const result = await script.run(input, context);
 
@@ -45,7 +51,7 @@ async function run() {
     skillName,
     input,
     output: result,
-  });
+  }, { onEvent: emitEvent });
 
   process.stdout.write(JSON.stringify({ ok: true, result }));
 }
